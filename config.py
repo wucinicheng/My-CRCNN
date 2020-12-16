@@ -13,15 +13,23 @@ def get_config():
 
     # several key selective parameters
     parser.add_argument('--data_dir', type=str,
-                        default='./data',
+                        default='./dataset',
                         help='dir to load data')
     parser.add_argument('--output_dir', type=str,
                         default='./output',
                         help='dir to save output')
 
+    # train and test filename
+    parser.add_argument('--train_file_name', type=str,
+                        default='TRAIN_FILE.TXT',
+                        help='the name of train file')
+    parser.add_argument('--test_file_name', type=str,
+                        default='TEST_FILE_FULL.TXT',
+                        help='the name of test file')
+
     # word embedding
     parser.add_argument('--embedding_path', type=str,
-                        default='./embedding/glove.6B.300d.txt',
+                        default='./embeddings/glove.6B.300d.txt',
                         help='pre_trained word embedding')
     parser.add_argument('--word_dim', type=int,
                         default=300,
@@ -52,6 +60,9 @@ def get_config():
     parser.add_argument('--batch_size', type=int,
                         default=128,
                         help='batch size')
+    parser.add_argument('--fold_', type=int,
+                        default=4,
+                        help='k-fold cross-validation')
     parser.add_argument('--lr', type=float,
                         default=1.0,
                         help='learning rate')
@@ -69,7 +80,7 @@ def get_config():
     parser.add_argument('--filter_num', type=int,
                         default=1000,
                         help='the number of filters in convolution')
-    parser.add_argument('--window', type=int,
+    parser.add_argument('--window_k', type=int,
                         default=3,
                         help='the size of window in convolution')
 
