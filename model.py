@@ -22,13 +22,13 @@ class CRCNN(nn.Module):
         """
             Given the vectors wp1and wp2for
             the word w with respect to the targets noun1and
-            noun2, the position embedding of w is given by
+            noun2, the position embeddings of w is given by
             the concatenation of these two vectors
         """
         self.dim = self.word_dim + 2 * self.pos_dim
 
         # net structures and operations
-        self.word_embedding = nn.Embedding.from_pretrained(embeddings=self.word_vec, freeze=False)
+        self.word_embedding = nn.Embedding.from_pretrained(embeddings=torch.from_numpy(self.word_vec), freeze=False)
 
         self.pos1_embedding = nn.Embedding(num_embeddings=2 * self.pos_dis + 3, embedding_dim=self.pos_dim)
         self.pos2_embedding = nn.Embedding(num_embeddings=2 * self.pos_dis + 3, embedding_dim=self.pos_dim)
@@ -123,6 +123,4 @@ class PairwiseRankingLoss(nn.Module):
         negative_loss = torch.log1p(torch.exp(self.gamma * (self.margin_negative + negative_scores)))
         loss = torch.mean(positive_loss + negative_loss)
         return loss
-
-
 

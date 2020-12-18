@@ -27,13 +27,13 @@ def get_config():
                         default='TEST_FILE_FULL.TXT',
                         help='the name of test file')
 
-    # word embedding
+    # word embeddings
     parser.add_argument('--embedding_path', type=str,
                         default='./embeddings/glove.6B.300d.txt',
-                        help='pre_trained word embedding')
+                        help='pre_trained word embeddings')
     parser.add_argument('--word_dim', type=int,
                         default=300,
-                        help='dimension of word embedding')
+                        help='dimension of word embeddings')
 
     # train settings
     parser.add_argument('--model_name', type=str,
@@ -60,21 +60,21 @@ def get_config():
     parser.add_argument('--batch_size', type=int,
                         default=128,
                         help='batch size')
-    parser.add_argument('--fold_', type=int,
+    parser.add_argument('--fold_k', type=int,
                         default=4,
                         help='k-fold cross-validation')
     parser.add_argument('--lr', type=float,
-                        default=1.0,
+                        default=1e-2,
                         help='learning rate')
     parser.add_argument('--max_len', type=int,
                         default=100,
                         help='max length of sentence')
     parser.add_argument('--pos_dis', type=int,
                         default=50,
-                        help='max distance of position embedding')
+                        help='max distance of position embeddings')
     parser.add_argument('--pos_dim', type=int,
                         default=70,
-                        help='dimension of position embedding')
+                        help='dimension of position embeddings')
 
     # hyper parameters for cnn
     parser.add_argument('--filter_num', type=int,

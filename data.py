@@ -5,38 +5,39 @@ from collections import defaultdict
 import numpy as np
 import pandas as pd
 import spacy
+from torch.utils.data import Dataset
 
 nlp = spacy.load('en_core_web_sm')
 
 SpecialVocab = collections.namedtuple('SpecialVocab', ['sos', 'eos', 'unknown',
                                         'padding'])
 special_vocab = SpecialVocab(sos='SEQUENCE_START', eos='SEQUENCE_END',
-                             unknown="UNK", padding='-PAD-')
+                             unknown="UNK", padding='PAD')
 
-Vocab = collections.namedtuple('Vocab', field_names=['words', 'size', 'dict', 'inv_dict'])
-
-def words2indices():
-    pass
+Vocab = collections.namedtuple('Vocab', field_names=['words', 'size', 'word2id', 'id2word'])
 
 
-class DataLoader:
+class MyDataLoader:
     def __init__(self, config):
         self.config = config
 
-        self.embeddings_path = config.embedding_path  # path of pre-trained word embedding
-        self.word_dim = config.word_dim  # dimension of word embedding
+        self.embeddings_path = config.embedding_path  # path of pre-trained word embeddings
+        self.word_dim = config.word_dim  # dimension of word embeddings
 
         self.train_file_path = os.path.join(config.data_dir, config.train_file_name)
         self.test_file_path  = os.path.join(config.data_dir, config.test_file_name)
 
-        self.train_data = self.load_data_from_semeval2010("train")
-        self.test_data  = self.load_data_from_semeval2010("test")
+        self.train_data_df = self.load_data_from_semeval2010("train")
+        self.test_data_df  = self.load_data_from_semeval2010("test")
 
         self.vocab = self.build_vocab()
 
-        self.word_embeddings = self.load_pre_embeddings()
+        self.word_emb = self.load_pre_embeddings()
 
-        self.class_num = 0
+        self.rel2id, self.id2rel, self.class_num = self.load_relation()
+
+        self.train_data, self.train_labels = self._df2dateset(self.train_data_df)
+        self.test_data, self.test_labels = self._df2dateset(self.test_data_df)
 
 
     def load_data_from_semeval2010(self, mode="train"):
@@ -54,7 +55,7 @@ class DataLoader:
             for line in rf:
                 _, sent = line.split('\t')
 
-                rel = next(rf).strip().upper()
+                rel = next(rf).strip()
                 next(rf)  # comment
                 next(rf)  # blankline
                 e1 = sent[sent.index('<e1>') + 4:sent.index('</e1>')]
@@ -89,7 +90,7 @@ class DataLoader:
 
     def build_vocab(self, min_freq=1):
 
-        df_all = pd.concat([self.train_data, self.test_data], ignore_index=True).reset_index(drop=True)
+        df_all = pd.concat([self.train_data_df, self.test_data_df], ignore_index=True).reset_index(drop=True)
         vocab_dict = defaultdict(int)
 
         for _, row in df_all.iterrows():
@@ -110,6 +111,17 @@ class DataLoader:
 
         return vocab
 
+    def load_relation(self):
+        relation_file = os.path.join(self.config.data_dir, 'relation2id.txt')
+        rel2id = {}
+        id2rel = {}
+        with open(relation_file, 'r', encoding='utf-8') as fr:
+            for line in fr:
+                relation, id_s = line.strip().split()
+                id_d = int(id_s)
+                rel2id[relation] = id_d
+                id2rel[id_d] = relation
+        return rel2id, id2rel, len(rel2id)
 
     def load_pre_embeddings(self, init_scale=0.25):
         print("loading pre_embeddings...")
@@ -134,3 +146,100 @@ class DataLoader:
         word_embeddings[0, :] = 0  # make embeddings of PADDING all zeros
         print("loading pre_embeddings done")
         return word_embeddings
+
+    def _df2dateset(self, datadf):
+        dataset = SemEvalDateset(datadf, self.rel2id, self.vocab.word2id, self.config)
+        return dataset.data, dataset.label
+
+
+class SemEvalDateset(Dataset):
+    def __init__(self, datadf, rel2id, word2id, config):
+        self.datadf = datadf
+
+        self.rel2id = rel2id
+        self.word2id = word2id
+
+        self.max_len = config.max_len
+        self.pos_dis = config.pos_dis
+
+        self.data, self.label = self.__load_data()
+
+    def __get_pos_index(self, x):
+        if x < -self.pos_dis:
+            return 0
+        if x >= -self.pos_dis and x <= self.pos_dis:
+            return x + self.pos_dis + 1
+        if x > self.pos_dis:
+            return 2 * self.pos_dis + 2
+
+    def __get_relative_pos(self, x, entity_pos):
+        if x < entity_pos[0]:
+            return self.__get_pos_index(x-entity_pos[0])
+        elif x > entity_pos[1]:
+            return self.__get_pos_index(x-entity_pos[1])
+        else:
+            return self.__get_pos_index(0)
+
+    def __symbolize_sentence(self, e1_pos, e2_pos, sentence):
+        """
+            Args:
+                e1_pos (tuple) span of e1
+                e2_pos (tuple) span of e2
+                sentence (list)
+        """
+        mask = [1] * len(sentence)
+        if e1_pos[0] < e2_pos[0]:
+            for i in range(e1_pos[0], e2_pos[1]+1):
+                mask[i] = 2
+            for i in range(e2_pos[1]+1, len(sentence)):
+                mask[i] = 3
+        else:
+            for i in range(e2_pos[0], e1_pos[1]+1):
+                mask[i] = 2
+            for i in range(e1_pos[1]+1, len(sentence)):
+                mask[i] = 3
+
+        words = []
+        pos1 = []
+        pos2 = []
+        length = min(self.max_len, len(sentence))
+        mask = mask[:length]
+
+        for i in range(length):
+            words.append(self.word2id.get(sentence[i].lower(), self.word2id['UNK']))
+            pos1.append(self.__get_relative_pos(i, e1_pos))
+            pos2.append(self.__get_relative_pos(i, e2_pos))
+
+        if length < self.max_len:
+            for i in range(length, self.max_len):
+                mask.append(0)  # 'PAD' mask is zero
+                words.append(self.word2id['PAD'])
+
+                pos1.append(self.__get_relative_pos(i, e1_pos))
+                pos2.append(self.__get_relative_pos(i, e2_pos))
+        unit = np.asarray([words, pos1, pos2, mask], dtype=np.int64)
+        unit = np.reshape(unit, newshape=(1, 4, self.max_len))
+        return unit
+
+    def __load_data(self):
+        data = []
+        labels = []
+        for _, row in self.datadf.iterrows():
+            label = row['rel']
+            sentence = row['sent']
+            e1_pos = (row['ent_1_start'], row['ent_1_end'])
+            e2_pos = (row['ent_2_start'], row['ent_2_start'])
+
+            label_idx = self.rel2id[label]
+            one_sentence = self.__symbolize_sentence(e1_pos, e2_pos, sentence)
+            data.append(one_sentence)
+            labels.append(label_idx)
+        return data, labels
+
+    def __getitem__(self, index):
+        data = self.data[index]
+        label = self.label[index]
+        return data, label
+
+    def __len__(self):
+        return len(self.label)
