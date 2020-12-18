@@ -1,27 +1,23 @@
 import os
-
+import numpy as np
 import torch
 from torch import optim
 
 from config import Config
-from data import DataLoader
+from data import MyDataLoader
 from model import CRCNN, PairwiseRankingLoss
 
+def print_result(predict_label, id2rel, start_idx=8001):
+    with open('predicted_result.txt', 'w', encoding='utf-8') as fw:
+        for i in range(0, predict_label.shape[0]):
+            fw.write('{}\t{}\n'.format(
+                start_idx+i, id2rel[int(predict_label[i])]))
 
-def get_kfold_data(k, i, X, y):
-    # 返回第 i+1 折 (i = 0 -> k-1) 交叉验证时所需要的训练和验证数据，X_train为训练集，X_valid为验证集
-    fold_size = X.shape[0] // k  # 每份的个数:数据总条数/折数（组数）
 
-    val_start = i * fold_size
-    if i != k - 1:
-        val_end = (i + 1) * fold_size
-        X_valid, y_valid = X[val_start:val_end], y[val_start:val_end]
-        X_train = torch.cat((X[0:val_start], X[val_end:]), dim=0)
-        y_train = torch.cat((y[0:val_start], y[val_end:]), dim=0)
-    else:  # 若是最后一折交叉验证
-        X_valid, y_valid = X[val_start:], y[val_start:]  # 若不能整除，将多的case放在最后一折里
-        X_train = X[0:val_start]
-        y_train = y[0:val_start]
+def change_lr(optimizer, new_lr):
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = new_lr
+
 
     return X_train, y_train, X_valid, y_valid
 
@@ -49,6 +45,7 @@ def traink(model, X_train, y_train, X_val, y_val, BATCH_SIZE, learning_rate, TOT
             # 计算损失函数
             loss = criterion(outputs, labels)
             loss.backward()
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
             optimizer.step()
             losses.append(loss.item())
             # 计算正确率
@@ -169,16 +166,24 @@ if __name__ == '__main__':
 
     print('--------------------------------------')
     print('start to load data ...')
-    loader = DataLoader(config)
-    word2id, \
-    word_vec = loader.word_embeddings
-    rel2id, id2rel, \
+    loader = MyDataLoader(config)
+
+    word2id = loader.vocab.word2id
+    word_vec = loader.word_emb
+    rel2id = loader.rel2id
+    id2rel = loader.id2rel
     class_num = loader.class_num
-    loader = SemEvalDataLoader(rel2id, word2id, config)
+
+    train_dev_data, train_dev_labels = None, None
+    if config.mode == 1:  # train mode
+        train_dev_data, train_dev_labels = loader.train_data, loader.train_labels
+    test_data, test_labels = loader.test_data, loader.test_labels
+
+    print('load data finish!')
 
     print('--------------------------------------')
-    model = CRCNN(word_vec=word_vec, class_num=class_num, config=config).to(config.device)
-    criterion = PairwiseRankingLoss(config=config)
+
+
 
     if config.mode == 1:
 
