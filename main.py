@@ -50,24 +50,27 @@ def traink(train_dev_data, train_index, dev_index, model, criterion, optimizer, 
     current_lr = config.lr
     best_f1_score = -9999.
     for epoch in trange(1, config.epoch+1):
-        if epoch > 5:
+        if epoch > 50:
             current_lr *= 0.95
             change_lr(optimizer, current_lr)
-        model.train()
+
         tbar = tqdm(train_loader)
         for step, (data, label) in enumerate(tbar):
-
+            model.train()
+            data = data.to(config.device)
+            label = label.to(config.device)
             optimizer.zero_grad()
             scores = model(data)
             loss = criterion(scores, label)
             loss.backward()
-            # torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
             optimizer.step()
 
             desc = 'Training: Epoch : %d/%d, Iter : %d/%d,  Loss: %.4f' % \
                    (epoch, config.epoch, step + 1, len(train_loader), loss.item())
             tbar.set_description(desc)
             tbar.update()
+
 
         model.eval()
         predict_labels = []
