@@ -40,6 +40,8 @@ class MyDataLoader:
         self.test_data, self.test_labels = self._df2dateset(self.test_data_df)
 
 
+
+
     def load_data_from_semeval2010(self, mode="train"):
 
         data = {'rel': [], 'sent': [], 'ent_1': [], 'ent_2': [], 'words': [],
